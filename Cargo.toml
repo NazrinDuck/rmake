@@ -1,0 +1,11 @@
+[package]
+name = "rmake"
+version = "0.1.0"
+authors = ["NazrinDuck"]
+edition = "2021"
+description = "A conveninet and flexiable make tool for .c/cpp/asm files"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.4.7", features = ["derive"] }
