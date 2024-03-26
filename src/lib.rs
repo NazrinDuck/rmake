@@ -1,91 +1,134 @@
 use clap::Parser;
+use colored::*;
 use std::fs;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::{
     error::Error,
+    io::{self, Read, Write},
     path::{Path, PathBuf},
 };
 
 #[derive(Parser)]
-#[command(version = "0.1.0",author = "NazrinDuck", about, long_about = None)]
+#[command(version = "0.2.0",author = "NazrinDuck", about, long_about = None)]
 pub struct Cli {
     pub files_name: Vec<String>,
 
-    #[arg(short = 'q', long = "quick")]
-    pub is_quick: bool,
+    #[arg(short = 'd', long = "detail")]
+    pub is_detailed: bool,
+    #[arg(short = 'r', long = "run")]
+    pub is_run: bool,
 }
 
-pub fn run(file_path: &Path, is_quick: bool) -> Result<(), Box<dyn Error>> {
-    let cmd_str = parse_file(file_path)?;
+struct File {
+    file_path: PathBuf,
+    file_stem: String,
+    file_extension: String,
+    output_folder: Option<PathBuf>,
+}
 
-    println!("{}", cmd_str);
+impl File {
+    fn new(file_path: PathBuf, file_stem: String, file_extension: String) -> Self {
+        File {
+            file_path,
+            file_stem,
+            file_extension,
+            output_folder: None,
+        }
+    }
 
-    if is_quick {
-        compile_quickly(cmd_str)?
+    fn set_folder(self: &mut File, folder: PathBuf) {
+        self.output_folder = Some(folder);
+    }
+
+    fn get_folder(self: &File) -> PathBuf {
+        self.output_folder.clone().unwrap()
+    }
+}
+
+pub fn run(file_path: &Path, is_detailed: bool, is_run: bool) -> Result<(), Box<dyn Error>> {
+    let mut file: File = parse_file(file_path)?;
+    let cmd_str: String = analyse_extension(&mut file)?;
+
+    if is_detailed {
+        //wait for next version
     } else {
+        compile(cmd_str)?;
+    }
+    if is_run {
+        run_file(&file)?;
     }
     Ok(())
 }
 
-fn parse_file(file_path: &Path) -> Result<String, Box<dyn Error>> {
+fn parse_file(file_path: &Path) -> Result<File, Box<dyn Error>> {
     if !file_path.try_exists()? {
         return Err(format!("{} don't exist!", file_path.to_str().unwrap()).into());
     };
 
     let path: PathBuf = fs::canonicalize(file_path.parent().unwrap())?;
-    let mut out_path: PathBuf = path.clone();
-    let cmd_str: String;
 
     let file_stem = file_path
         .file_stem()
-        .expect("[Error]: No file stem found!")
+        .ok_or("No file stem found!")?
         .to_str()
         .unwrap();
 
-    match file_path
+    let file_extension = file_path
         .extension()
-        .expect("[Error]: No extension found!")
+        .ok_or("No extension found!")?
         .to_str()
-    {
-        Some("c") => {
+        .unwrap();
+
+    Ok(File::new(
+        path,
+        file_stem.to_string(),
+        file_extension.to_string(),
+    ))
+}
+
+fn analyse_extension(file: &mut File) -> Result<String, Box<dyn Error>> {
+    let mut out_path: PathBuf = file.file_path.clone();
+    let cmd_str: String;
+
+    match file.file_extension.as_str() {
+        "c" => {
             out_path.push("c-output");
             if !out_path.try_exists()? {
-                fs::create_dir(out_path)?;
+                fs::create_dir(&out_path)?;
             }
 
+            file.set_folder(out_path);
             cmd_str = String::from(format!(
                 "gcc -O3 -Wall -Wextra {dir}/{name}.c -o {dir}/c-output/{name}.out",
-                dir = path.display(),
-                name = file_stem,
+                dir = file.file_path.display(),
+                name = file.file_stem,
             ));
         }
-        Some("cpp") => {
+        "cpp" => {
             out_path.push("cpp-output");
             if !out_path.try_exists()? {
-                fs::create_dir(out_path)?;
+                fs::create_dir(&out_path)?;
             }
 
+            file.set_folder(out_path);
             cmd_str = String::from(format!(
                 "g++ -O3 -Wall -Wextra {dir}/{name}.c -o {dir}/cpp-output/{name}.out",
-                dir = path.display(),
-                name = file_stem,
+                dir = file.file_path.display(),
+                name = file.file_stem,
             ));
         }
-        Some(other) => {
+        other => {
             return Err(format!(
                 ".{} file is not supported yet or it can not be complied",
                 other
             )
             .into());
         }
-        None => {
-            return Err("Extension analysing error!".into());
-        }
     };
     Ok(cmd_str)
 }
 
-fn compile_quickly(cmd_str: String) -> Result<(), Box<dyn Error>> {
+fn compile(cmd_str: String) -> Result<(), Box<dyn Error>> {
     let output = if cfg!(target_os = "windows") {
         Command::new("cmd").args(["/C", &cmd_str]).output()?
     } else {
@@ -96,7 +139,7 @@ fn compile_quickly(cmd_str: String) -> Result<(), Box<dyn Error>> {
     if output.status.success() {
         println!("quick compiling successfully!");
         if !err.is_empty() {
-            println!("[Waring]: {}", err);
+            println!("{}: {}", "[Warning]".yellow(), err);
         }
         Ok(())
     } else {
@@ -104,24 +147,64 @@ fn compile_quickly(cmd_str: String) -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn run_file() {}
+fn run_file(file: &File) -> Result<(), Box<dyn Error>> {
+    println!("running code...");
+
+    let path: PathBuf = file.get_folder();
+    let cmd_str = path.to_str().unwrap();
+
+    println!("=====================input=====================");
+    println!("(Press Ctrl+D to quit)");
+
+    let mut input: Vec<u8> = Vec::new();
+    io::stdin().read_to_end(&mut input)?;
+    let input: String = String::from_utf8(input)?;
+
+    println!("=====================output====================");
+    let mut child = if cfg!(target_os = "windows") {
+        Command::new("cmd")
+            .args(["/C", &cmd_str])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()?
+    } else {
+        Command::new("sh")
+            .arg("-c")
+            .arg(&cmd_str)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()?
+    };
+
+    let mut stdin = child.stdin.take().unwrap();
+    std::thread::spawn(move || {
+        stdin.write_all(input.as_bytes()).unwrap();
+    });
+
+    let output = child.wait_with_output()?;
+
+    println!("{}", String::from_utf8_lossy(&output.stdout));
+
+    println!("======================End======================");
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {
-    use crate::{compile_quickly, run};
+    use crate::{compile, run};
     use std::path::Path;
 
     #[test]
     fn test_run() {
-        assert!(run(Path::new("./test1.c"), true).is_err());
-        assert!(run(Path::new("./test2.cpp"), true).is_err());
-        assert!(run(Path::new("./test2"), true).is_err());
-        assert!(run(Path::new("./test2.a"), true).is_err());
+        assert!(run(Path::new("./test1.c"), true, true).is_err());
+        assert!(run(Path::new("./test2.cpp"), true, true).is_err());
+        assert!(run(Path::new("./test2"), true, true).is_err());
+        assert!(run(Path::new("./test2.a"), true, true).is_err());
     }
     #[test]
     #[should_panic]
     fn test_panic() {
-        run(Path::new("./.a"), true).unwrap();
+        run(Path::new("./.a"), true, true).unwrap();
     }
     #[test]
     fn test_compile_quickly() {
