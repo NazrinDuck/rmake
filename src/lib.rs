@@ -9,7 +9,7 @@ use std::{
 };
 
 #[derive(Parser)]
-#[command(version = "0.2.0",author = "NazrinDuck", about, long_about = None)]
+#[command(version = "0.2.1",author = "NazrinDuck", about, long_about = None)]
 pub struct Cli {
     pub files_name: Vec<String>,
 
@@ -150,7 +150,8 @@ fn compile(cmd_str: String) -> Result<(), Box<dyn Error>> {
 fn run_file(file: &File) -> Result<(), Box<dyn Error>> {
     println!("running code...");
 
-    let path: PathBuf = file.get_folder();
+    let mut path: PathBuf = file.get_folder();
+    path.push(format!("{}.out", &file.file_stem));
     let cmd_str = path.to_str().unwrap();
 
     println!("=====================input=====================");

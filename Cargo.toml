@@ -1,6 +1,6 @@
 [package]
 name = "rmake"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["NazrinDuck"]
 edition = "2021"
 description = "A conveninet and flexiable make tool for .c/cpp files"
