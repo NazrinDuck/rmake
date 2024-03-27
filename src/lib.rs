@@ -9,7 +9,7 @@ use std::{
 };
 
 #[derive(Parser)]
-#[command(version = "0.2.1",author = "NazrinDuck", about, long_about = None)]
+#[command(version = "0.2.2",author = "NazrinDuck", about, long_about = None)]
 pub struct Cli {
     pub files_name: Vec<String>,
 
@@ -99,7 +99,7 @@ fn analyse_extension(file: &mut File) -> Result<String, Box<dyn Error>> {
 
             file.set_folder(out_path);
             cmd_str = String::from(format!(
-                "gcc -O3 -Wall -Wextra {dir}/{name}.c -o {dir}/c-output/{name}.out",
+                "gcc -O3 -Wall -Wextra {dir}/{name}.c -lm -o {dir}/c-output/{name}.out",
                 dir = file.file_path.display(),
                 name = file.file_stem,
             ));
@@ -112,7 +112,7 @@ fn analyse_extension(file: &mut File) -> Result<String, Box<dyn Error>> {
 
             file.set_folder(out_path);
             cmd_str = String::from(format!(
-                "g++ -O3 -Wall -Wextra {dir}/{name}.c -o {dir}/cpp-output/{name}.out",
+                "g++ -O3 -Wall -Wextra {dir}/{name}.cpp -o {dir}/cpp-output/{name}.out",
                 dir = file.file_path.display(),
                 name = file.file_stem,
             ));
@@ -161,7 +161,6 @@ fn run_file(file: &File) -> Result<(), Box<dyn Error>> {
     io::stdin().read_to_end(&mut input)?;
     let input: String = String::from_utf8(input)?;
 
-    println!("=====================output====================");
     let mut child = if cfg!(target_os = "windows") {
         Command::new("cmd")
             .args(["/C", &cmd_str])
@@ -182,6 +181,7 @@ fn run_file(file: &File) -> Result<(), Box<dyn Error>> {
         stdin.write_all(input.as_bytes()).unwrap();
     });
 
+    println!("=====================output====================");
     let output = child.wait_with_output()?;
 
     println!("{}", String::from_utf8_lossy(&output.stdout));
