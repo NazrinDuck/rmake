@@ -9,14 +9,18 @@ use std::{
 };
 
 #[derive(Parser)]
-#[command(version = "0.2.2",author = "NazrinDuck", about, long_about = None)]
+#[command(version = "0.2.3",author = "NazrinDuck", about, long_about = None)]
 pub struct Cli {
     pub files_name: Vec<String>,
 
+    #[arg(short = 'g', long = "debug")]
+    pub is_debug: bool,
     #[arg(short = 'd', long = "detail")]
     pub is_detailed: bool,
     #[arg(short = 'r', long = "run")]
     pub is_run: bool,
+    #[arg(short = 'H', long = "history")]
+    pub use_history: bool,
 }
 
 struct File {
@@ -45,15 +49,21 @@ impl File {
     }
 }
 
-pub fn run(file_path: &Path, is_detailed: bool, is_run: bool) -> Result<(), Box<dyn Error>> {
+pub fn run(
+    file_path: &Path,
+    is_debug: bool,
+    is_detailed: bool,
+    is_run: bool,
+) -> Result<(), Box<dyn Error>> {
     let mut file: File = parse_file(file_path)?;
-    let cmd_str: String = analyse_extension(&mut file)?;
+    let cmd_str: String = analyse_extension(&mut file, is_debug)?;
 
     if is_detailed {
         //wait for next version
     } else {
         compile(cmd_str)?;
     }
+
     if is_run {
         run_file(&file)?;
     }
@@ -86,9 +96,14 @@ fn parse_file(file_path: &Path) -> Result<File, Box<dyn Error>> {
     ))
 }
 
-fn analyse_extension(file: &mut File) -> Result<String, Box<dyn Error>> {
+fn analyse_extension(file: &mut File, is_debug: bool) -> Result<String, Box<dyn Error>> {
     let mut out_path: PathBuf = file.file_path.clone();
     let cmd_str: String;
+    let c_flags: &str = if is_debug {
+        "-O0 -g -masm=intel -no-pie -fno-stack-protector"
+    } else {
+        "-O3 -Wall -Wextra -lm"
+    };
 
     match file.file_extension.as_str() {
         "c" => {
@@ -99,7 +114,7 @@ fn analyse_extension(file: &mut File) -> Result<String, Box<dyn Error>> {
 
             file.set_folder(out_path);
             cmd_str = String::from(format!(
-                "gcc -O3 -Wall -Wextra {dir}/{name}.c -lm -o {dir}/c-output/{name}.out",
+                "gcc {dir}/{name}.c -o {dir}/c-output/{name}.out {c_flags}",
                 dir = file.file_path.display(),
                 name = file.file_stem,
             ));
@@ -112,7 +127,7 @@ fn analyse_extension(file: &mut File) -> Result<String, Box<dyn Error>> {
 
             file.set_folder(out_path);
             cmd_str = String::from(format!(
-                "g++ -O3 -Wall -Wextra {dir}/{name}.cpp -o {dir}/cpp-output/{name}.out",
+                "g++ {dir}/{name}.cpp -o {dir}/cpp-output/{name}.out -O3 -Wall -Wextra {c_flags}",
                 dir = file.file_path.display(),
                 name = file.file_stem,
             ));
@@ -197,15 +212,15 @@ mod tests {
 
     #[test]
     fn test_run() {
-        assert!(run(Path::new("./test1.c"), true, true).is_err());
-        assert!(run(Path::new("./test2.cpp"), true, true).is_err());
-        assert!(run(Path::new("./test2"), true, true).is_err());
-        assert!(run(Path::new("./test2.a"), true, true).is_err());
+        assert!(run(Path::new("./test1.c"), true, true, true).is_err());
+        assert!(run(Path::new("./test2.cpp"), true, true, true).is_err());
+        assert!(run(Path::new("./test2"), true, true, true).is_err());
+        assert!(run(Path::new("./test2.a"), true, true, true).is_err());
     }
     #[test]
     #[should_panic]
     fn test_panic() {
-        run(Path::new("./.a"), true, true).unwrap();
+        run(Path::new("./.a"), true, true, true).unwrap();
     }
     #[test]
     fn test_compile_quickly() {
