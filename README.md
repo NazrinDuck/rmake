@@ -15,9 +15,9 @@ cd rmake
 
 ### Second
 
-generate release bin and copy to ~/.cargo/bin
+compile a release version bin and copy to ~/.cargo/bin
 
 ```
 cargo build --release
-cp ./target/release/rmake ~/.cargo/bin
+./update.sh
 ```
